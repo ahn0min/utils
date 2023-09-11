@@ -4,6 +4,7 @@ const {
   retry,
   TIMEOUT_ERROR_MESSAGE,
   RESPONSE_ERROR_MESSAGE,
+  RETRY_ERROR_MESSAGE,
 } = require("@/promises");
 
 describe("sleep", () => {
@@ -74,92 +75,54 @@ describe("timeout", () => {
 // test를 먼저 짜보자.
 
 describe("retry", () => {
-  // const [MAXIMUM_RETRY, INTEGER] = [2, 150];
-
-  const MAXIMUM_RETRY = 10;
-
+  const MAXIMUM_RETRY = 3;
   const INTEGER = {
-    PASS: 100,
-    BASE: 200,
-    // OVER: 200,
-    OVER: 2000,
+    PASS: 50,
+    BASE: 100,
+    OVER: 150,
+    MAX: 200,
   } as const;
-  // const PROMISE_END_TIME = {
-  //   OVER: INTEGER + 50,
-  //   PASS: INTEGER - 50,
-  // };
-
   const RESPONSE_DATA = "return data";
 
-  test("retry가 일어난걸 체크", async () => {
-    // 첫케이스
-    const start = new Date();
-    await retry(
-      () => mockResolvedPromise(RESPONSE_DATA, INTEGER.OVER),
-      MAXIMUM_RETRY,
-      INTEGER.BASE
-    );
-    const end = new Date();
-    const difference = end.getTime() - start.getTime();
+  const passPromise = () => mockResolvedPromise(RESPONSE_DATA, INTEGER.PASS);
+  const overPromise = () => mockResolvedPromise(RESPONSE_DATA, INTEGER.OVER);
+  const maxOverPromise = () =>
+    mockResolvedPromise(RESPONSE_DATA, INTEGER.MAX * (MAXIMUM_RETRY + 1));
 
-    // await expect(difference).toBeGreaterThanOrEqual(INTEGER.BASE);
-    expect(difference).toBeLessThanOrEqual(INTEGER.OVER * 2);
+  // Resolved 일 때
+  test("no retry only one call", async () => {
+    const startTime = new Date().getTime();
+    const result = await retry(passPromise, MAXIMUM_RETRY, INTEGER.MAX);
+    const endTime = new Date().getTime();
+    const diffrence = endTime - startTime;
 
-    // 두번째 케이스
+    expect(diffrence).toBeGreaterThanOrEqual(INTEGER.PASS);
+    expect(diffrence).toBeLessThanOrEqual(INTEGER.BASE);
+    expect(result).toBe(RESPONSE_DATA);
   });
 
-  /*
-  test("retry no Because only resolve", async () => {
-    const start = new Date();
-    const result = await retry(
-      () => mockResolvedPromise(RESPONSE_DATA, PROMISE_END_TIME.PASS),
-      MAXIMUM_RETRY,
-      INTEGER
-    );
-    const end = new Date();
+  test("retry count over", async () => {
+    const startTime = new Date().getTime();
+    await expect(
+      async () => await retry(maxOverPromise, MAXIMUM_RETRY, INTEGER.MAX)
+    ).rejects.toThrow(new Error(RETRY_ERROR_MESSAGE));
+    const endTime = new Date().getTime();
+    const diffrence = endTime - startTime;
 
-    const diffrence = end.getTime() - start.getTime();
-    expect(diffrence).toBeLessThanOrEqual(INTEGER);
+    expect(diffrence).toBeGreaterThanOrEqual(INTEGER.MAX * MAXIMUM_RETRY);
+    expect(diffrence).toBeLessThanOrEqual(INTEGER.MAX * (MAXIMUM_RETRY + 1));
   });
 
-  */
+  test("retring success first promise function", async () => {
+    const startTime = new Date().getTime();
+    const result = await retry(overPromise, MAXIMUM_RETRY, INTEGER.BASE);
+    const endTime = new Date().getTime();
+    const diffrence = endTime - startTime;
 
-  // test(`retryed only once Because the first promise is resolved when the second promise is pending.`, async () => {
-  //   const start = new Date();
-  //   const result = await retry(
-  //     () => mockResolvedPromise(RESPONSE_DATA, PROMISE_END_TIME.OVER),
-  //     MAXIMUM_RETRY,
-  //     INTEGER
-  //   );
-  //   const end = new Date();
-
-  //   const diffrence = end.getTime() - start.getTime();
-
-  //   expect(result).toBe(RESPONSE_DATA);
-  //   // to be greater than or equal why? end time is all retry after
-  //   expect(diffrence).toBeGreaterThanOrEqual(PROMISE_END_TIME.OVER);
-  // });
-
-  // test(`어떤거 체크할까 2번 pending일때 1번이 resolved가 되었을 떄 더이상 호출을 하지 않는지`, async () => {
-  //   const start = new Date();
-  //   const result = await retry(
-  //     () => mockResolvedPromise(RESPONSE_DATA, PROMISE_END_TIME.OVER * 5),
-  //     2,
-  //     INTEGER
-  //   );
-  //   const end = new Date();
-
-  //   const diffrence = end.getTime() - start.getTime();
-
-  //   // count 확인해보자.
-  //   expect(result).toBe([RESPONSE_DATA, 2]);
-  //   expect(diffrence).toBeLessThanOrEqual(INTEGER * MAXIMUM_RETRY);
-  //   expect(diffrence).toBeGreaterThanOrEqual(PROMISE_END_TIME.OVER);
-
-  //   // 왜 throw error를 하는걸까?
-  // });
-
-  // test("0번인 경우");
+    expect(result).toBe(RESPONSE_DATA);
+    expect(diffrence).toBeGreaterThanOrEqual(INTEGER.BASE);
+    expect(diffrence).toBeLessThanOrEqual(INTEGER.MAX);
+  });
 });
 
 // pending인지 fullfilled인지 확인하는것도 있으면 좋겠다.
